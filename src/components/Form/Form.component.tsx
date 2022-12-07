@@ -5,8 +5,12 @@ import { DEFAULT_CARD_COLOR } from "~/config/common.config";
 import { Model } from "~/models/Playlist.model";
 
 import { BarsArrowDownIcon } from "@heroicons/react/20/solid";
+import { Response as CreateResponse } from "~/pages/api/playlist";
 
 import styles from "./Form.module.css";
+import slugify from "slugify";
+import useSpotify from "~/hooks/useSpotify.hook";
+import useList from "~/hooks/useList.hook";
 
 type FormData = Model;
 
@@ -15,6 +19,15 @@ interface Props {
 }
 
 export const Form: React.FC<Props> = ({}) => {
+  const { me } = useSpotify();
+
+  const { mutate } = useList({
+    limit: 0,
+    revalidateOnMount: false,
+    revalidateOnFocus: false,
+  });
+
+
   const {
     register,
     setValue,
@@ -34,15 +47,35 @@ export const Form: React.FC<Props> = ({}) => {
 
   const [loading, setLoading] = React.useState(false);
 
-  const onSubmit = handleSubmit(async (data) => {
-    setLoading(true);
-    console.log(data);
+  React.useEffect(() => {
+    if (!me?.display_name) return;
+    setValue("owner", me.display_name);
+  }, [me]);
 
-    setTimeout(() => {
-      setLoading(false);
-      reset();
-    }, 2000);
-  });
+  const onSubmit = handleSubmit(async (data) => {
+  data.slug = slugify(data.name, { lower: true });
+  try {
+    setLoading(true);
+    const response: Response = await fetch("/api/playlist", {
+      method: "POST",
+      body: JSON.stringify(data),
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`Error! status: ${response.status}`);
+    }
+    const result: CreateResponse = await response.json();
+    mutate();
+    setLoading(false);
+    reset();
+    return result;
+  } catch (error) {
+      console.log(error);
+  }
+});
 
   return (
     <>
